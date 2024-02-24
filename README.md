@@ -1,5 +1,11 @@
 # Socker
-Socker is a Docker implementation in bash using flat images instead of `overlay` filesystem. Making it useful to inspect images, create base images, flatten existing images etc. Image root filesystem is downloaded and extracted to `~/.socker/images/<user>/<repo>/<tag>` where it can be further manipulated and uploaded again.
+Socker is a standalone Docker implementation in Bash using flat images instead of `OverlayFSrlay` filesystem. Making it useful to perform various actions on images, such as:
+
+* Create base images
+* Flatten existing images
+* Analyse images
+
+Image root filesystem, maifest.json and config.json are downloaded and extracted to `~/.socker/images/<docker-hub-username>/<repo>/<tag>` where it can be further manipulated and uploaded again.
 
 ## Prerequisites
 * bash
@@ -15,50 +21,49 @@ curl -sO https://raw.githubusercontent.com/n7on/socker/main/socker && sudo mv so
 ## Examples
 
 ### Download Image
-`socker` requests Docker registry API's to fetch the manifest, downloads the layers and extracts it to the fileystem in correct order under `~/.socker/images/<docker-hub-username>/<repo>/<tag>`. Making usable in order to explore it further.  
+`socker` requests Docker registry API's to fetch the manifest.json, config.json and downloads the layers and extracts it to the fileystem in correct order under `~/.socker/images/<docker-hub-username>/<repo>/<tag>/rootfs`. Making usable in order to explore it further.  
 
 Ex. Download alpine:latest to `~/.socker/images` 
 
 ``` bash
 
-# note: in the main Docker Registry, all official images are part of the "library" "user".
+# note: in the main Docker Registry, all official images are part of the library "user".
 socker pull library/alpine:latest
 
 ```
 
 ### Upload Image
-You probably would want to first do `socker pull` to download some other image to work on, and move that to `~/.socker/images/<username>/`
+You probably would want to first do `socker pull` to download some other image to work on, and move that to `~/.socker/images/<docker-hub-username>/`.
 
 `socker push` expects following environment variables to be exported before running.
 
 ```bash
-export DOCKER_USERNAME=<your username>
-export DOCKER_PASSWORD=<your password>
+export DOCKER_USERNAME=<your docker-hub-username>
+export DOCKER_PASSWORD=<your docker-hub-password>
 
 ```
 
 Ex. Move Nginx image/filesystem so it can be altered and uploaded to your own Docker Repo.
 ```bash
-mkdir -p ~/.socker/images/<username>
-mv ~/.socker/images/library/nginx ~/.socker/images/<username>/<repo>
+mkdir -p ~/.socker/images/<docker-hub-username>
+mv ~/.socker/images/library/nginx ~/.socker/images/<docker-hub-username>/<repo>
 
 ```
 
-Ex. Upload `~/.socker/images/<username>/alpine/latest` to `<username>/alpine:latest`  
+Ex. Upload `~/.socker/images/<docker-hub-username>/alpine/latest` to `<docker-hub-username>/alpine:latest`  
 ``` bash
 
-# note: in the main Docker registry, all official images are part of the "library" repository.
-socker put <username>/alpine:latest
+socker put <docker-hub-username>/alpine:latest
 
 ```
 
 
 ### Create own base Image
-New base images can be created by copying what we need to `/.socker/images/<username>/<repo>/<tag>/` path and run `socker push <username>/<repo>:<tag>`. Which upload the manifest, configuration file and a single layer (as a tarball) to Docker repository using it's API's. Executables in Linux usually have dependencies to shared objects (dynamic libraries), so we need to add them as well. With that in mind, we would create an Image with only `ls` and `bash`, and upload it to our own Docker Repo, as a base-image:
+New base images can be created by copying what we need to `/.socker/images/<docker-hub-username>/<repo>/<tag>/rootfs` path and run `socker push <docker-hub-username>/<repo>:<tag>`. Which upload the manifest, configuration file and a single layer (as a tarball) to Docker repository using it's API's. Executables in Linux usually have dependencies to shared objects (dynamic libraries), so we need to add them as well. With that in mind, we would create an Image with only `ls` and `bash`, and upload it to our own Docker Repo, as a base-image:
 
 ```bash
 # 1. create folders
-path=~/.socker/images/<username>/<repo>/<tag>/
+path=~/.socker/images/<docker-hub-username>/<repo>/<tag>/rootfs
 mkdir -p $path/{bin,lib}
 
 cd $path
@@ -100,6 +105,13 @@ socker push <docker-hub-username>/<repository>:<tag>
 
 ```
 
+This could off course be used in Docker as well, so we could start up an container with only `ls` and `bash` available bu using the new image.
+
+```bash
+
+docker run -it --rm <docker-hub-username>/<repository>:<tag> bash
+```
+
 
 ### Run
 `socker` uses `unshare` to create namespaces uts, mount, pid and ipc. And initializes the process by doing following:
@@ -123,7 +135,7 @@ socker run library/alpine:latest sh
 ### Use with WSL2
 We could use the image root filesystem in WSL2, importing the filesystem as a tarball in WSL2 will create a new WSL2 distribution. 
 
-> Docker Desktop for Windows can be used with WSL2, which will create two distributions called docker-desktop & docker-desktop-data. The one where Docker Runtime runs is docker-desktop.
+> Note, WSL2 and Docker use same concepts. The main difference is how `PID 1` is handled. In Docker it's the first process created in the container. But WSL2 has it's own `init` instead and works more like a normal Linux distribution.
 
 Ex. Use image with WSL2
 

@@ -9,6 +9,7 @@ images_path="$HOME/.socker/images"
 image_path="$images_path/$repo/$tag"
 repo_path="$images_path/$repo"
 tarball_path="$images_path/$repo/$tag/rootfs.tar.gz"
+tarball_uncompressed_path="$images_path/$repo/$tag/rootfs.tar"
 config_path="$images_path/$repo/$tag/config.json"
 
 registry_auth_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:$repo:pull"
@@ -85,9 +86,8 @@ function image_put_blob(){
 
 function image_put(){
     local url="$registry_uri/$1/manifests/$3"
-
-    local layer=$(image_put_blob $1 $2 "$tarball_path")
-    local config=$(image_put_blob $1 $2 "$config_path")
+    local layer=$(image_put_blob "$1" "$2" "$tarball_path")
+    local config=$(image_put_blob "$1" "$2" "$config_path")
 
     local manifest='{
     "schemaVersion": 2,
@@ -105,7 +105,8 @@ function image_put(){
     ]
     }'
 
-    curl -X PUT -s -H "Authorization: Bearer $token" -H "Content-Type: application/vnd.docker.distribution.manifest.v2+json" --data "$manifest" "$url"
+    echo $manifest | jq
+    curl -X PUT -s -H "Authorization: Bearer $2" -H "Content-Type: application/vnd.docker.distribution.manifest.v2+json" --data "$manifest" "$url"
 }
 
 
@@ -119,17 +120,18 @@ case "$1" in
     pull)
     [ ! -d "$image_path" ] || die "Image already downloaded in $image_path"
     
-    token=$(image_get_token $repo)
-    resp=$(image_get_manifest $repo $tag $token)
-
+    token=$(image_get_token "$repo")
+    resp=$(image_get_manifest "$repo" "$tag" "$token")
+    
     if echo $resp | jq -e 'has("manifests")' > /dev/null; then
         digest=$(echo $resp | jq -r ".manifests | .[] | select(.platform.architecture == \"${platform}\" and .platform.os == \"${os}\") | .digest")
-        resp=$(image_get_manifest $repo $digest $token)
+        resp=$(image_get_manifest "$repo" "$digest" "$token")
     fi
     mkdir -p "$image_path/rootfs"
-    
+    echo "$resp" > $image_path/manifest.json
     echo "Downloading to: $image_path"
-    image_get_blob $repo $(echo $resp | jq -r '.config.digest') $token $image_path/config.json
+    # get config
+    image_get_blob $repo $(echo $resp | jq -r '.config.digest') "$token" $image_path/config.json
     
     echo $resp | jq -r '.layers[] | .digest' | while read l; do
         image_get_blob $repo $l $token $image_path/layer.tar
@@ -142,12 +144,37 @@ case "$1" in
 
     [ -z "$DOCKER_USERNAME" -o -z "$DOCKER_PASSWORD" ] && die "DOCKER_USERNAME or DOCKER_PASSWORD not set!"
 
-    if [ ! -f $config_path ];then
-        echo -e "{\n\t\"Cmd\": [\"sh\"]\n}" > $config_path 
+    tar -czf $tarball_path -C $image_path/rootfs .
+    tar -cf $tarball_uncompressed_path -C $image_path/rootfs .
+    tarball_digest=$(sha256sum $tarball_uncompressed_path | cut -d ' ' -f1)
+    rm $tarball_uncompressed_path
+    if $true ; then #[ ! -f $config_path ];then
+        config="{
+            \"architecture\": \"amd64\",
+            \"config\": {
+                \"Env\": [
+                    \"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"
+                ],
+                \"Cmd\": [
+                    \"/bin/sh\"
+                ]
+            },
+            \"os\": \"linux\",
+            \"rootfs\": {
+                \"type\": \"layers\",
+                \"diff_ids\": [
+                    \"sha256:$tarball_digest\"
+                ]
+            }
+        }
+        "
+        echo -e "$config" > $config_path
+
+    else
+        echo $(jq ".rootfs.diff_ids |= [\"$tarball_digest\"]" $config_path) > $config_path 
     fi
     
-    tar -czf $tarball_path -C $image_path/rootfs .
-    image_put $repo $(image_get_push_token $repo) $tag 
+    image_put $repo "$(image_get_push_token $repo)" $tag 
     ;;
     run)
 
