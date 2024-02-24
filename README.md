@@ -1,5 +1,5 @@
 # Socker
-Socker is a standalone Docker implementation in Bash using flat images instead of `OverlayFSrlay` filesystem. Making it useful to perform various actions on images, such as:
+Socker is a standalone Docker implementation in Bash using flat images instead of `OverlayFS` filesystem. Making it useful to perform various actions on images, such as:
 
 * Create base images
 * Flatten existing images
