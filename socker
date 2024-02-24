@@ -105,7 +105,6 @@ function image_put(){
     ]
     }'
 
-    echo $manifest | jq
     curl -X PUT -s -H "Authorization: Bearer $2" -H "Content-Type: application/vnd.docker.distribution.manifest.v2+json" --data "$manifest" "$url"
 }
 
@@ -145,12 +144,13 @@ case "$1" in
     [ -z "$DOCKER_USERNAME" -o -z "$DOCKER_PASSWORD" ] && die "DOCKER_USERNAME or DOCKER_PASSWORD not set!"
 
     tar -czf $tarball_path -C $image_path/rootfs .
+    # config need a sha256sum from uncompressed tar, while manifest need it from a compressed tar.
     tar -cf $tarball_uncompressed_path -C $image_path/rootfs .
     tarball_digest=$(sha256sum $tarball_uncompressed_path | cut -d ' ' -f1)
     rm $tarball_uncompressed_path
     if $true ; then #[ ! -f $config_path ];then
         config="{
-            \"architecture\": \"amd64\",
+            \"architecture\": \"$platform\",
             \"config\": {
                 \"Env\": [
                     \"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"
@@ -159,7 +159,7 @@ case "$1" in
                     \"/bin/sh\"
                 ]
             },
-            \"os\": \"linux\",
+            \"os\": \"$os\",
             \"rootfs\": {
                 \"type\": \"layers\",
                 \"diff_ids\": [
