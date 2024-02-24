@@ -5,7 +5,7 @@ Socker is a standalone Docker implementation in Bash using flat images instead o
 * Flatten existing images
 * Analyse images
 
-Image root filesystem, maifest.json and config.json are downloaded and extracted to `~/.socker/images/<docker-hub-username>/<repo>/<tag>` where it can be further manipulated and uploaded again.
+Image root filesystem, maifest.json and config.json are downloaded and extracted to `~/.socker/images/<docker-hub-username>/<repo>/<tag>` where it can be further manipulated and uploaded again. Either by manipulating filesystem manually, or by using `socker` to run filesystem in a basic container so that packages could be installed etc. 
 
 ## Prerequisites
 * bash
@@ -23,12 +23,12 @@ curl -sO https://raw.githubusercontent.com/n7on/socker/main/socker && sudo mv so
 ### Download Image
 `socker` requests Docker registry API's to fetch the manifest.json, config.json and downloads the layers and extracts it to the fileystem in correct order under `~/.socker/images/<docker-hub-username>/<repo>/<tag>/rootfs`. Making usable in order to explore it further.  
 
-Ex. Download alpine:latest to `~/.socker/images` 
+Ex. Download nginx:latest to `~/.socker/images/library/nginx/latest/rootfs` 
 
 ``` bash
 
 # note: in the main Docker Registry, all official images are part of the library "user".
-socker pull library/alpine:latest
+socker pull library/nginx:latest
 
 ```
 
@@ -43,23 +43,23 @@ export DOCKER_PASSWORD=<your docker-hub-password>
 
 ```
 
-Ex. Move Nginx image/filesystem so it can be altered and uploaded to your own Docker Repo.
+Ex. Move Nginx filesystem so it can be altered and uploaded to your own Docker Repo.
 ```bash
 mkdir -p ~/.socker/images/<docker-hub-username>
-mv ~/.socker/images/library/nginx ~/.socker/images/<docker-hub-username>/<repo>
+mv ~/.socker/images/library/nginx ~/.socker/images/<docker-hub-username>/nginx
 
 ```
 
-Ex. Upload `~/.socker/images/<docker-hub-username>/alpine/latest` to `<docker-hub-username>/alpine:latest`  
+Ex. Upload `~/.socker/images/<docker-hub-username>/nginx/latest` to `<docker-hub-username>/nginx:latest`  
 ``` bash
-
-socker put <docker-hub-username>/alpine:latest
+socker put <docker-hub-username>/nginx:latest
 
 ```
-
 
 ### Create own base Image
-New base images can be created by copying what we need to `/.socker/images/<docker-hub-username>/<repo>/<tag>/rootfs` path and run `socker push <docker-hub-username>/<repo>:<tag>`. Which upload the manifest, configuration file and a single layer (as a tarball) to Docker repository using it's API's. Executables in Linux usually have dependencies to shared objects (dynamic libraries), so we need to add them as well. With that in mind, we would create an Image with only `ls` and `bash`, and upload it to our own Docker Repo, as a base-image:
+New base images can be created by copying what we need to `/.socker/images/<docker-hub-username>/<repo>/<tag>/rootfs` path and run `socker push <docker-hub-username>/<repo>:<tag>`. Which upload the manifest, configuration file and a single layer (as a tarball) to Docker repository using it's API's. 
+
+Executables in Linux usually have dependencies to shared objects (dynamic libraries), so we need to add them as well. With that in mind, we would create an Image with only `ls` and `bash`, and upload it to our own Docker Repo, as a base-image:
 
 ```bash
 # 1. create folders
