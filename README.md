@@ -5,7 +5,13 @@ Socker is a standalone Docker implementation in bash using flat images instead o
 * Flatten existing images
 * Analyse images
 
-Image root filesystem, maifest.json and config.json are downloaded and extracted to `~/.socker/images/<docker-hub-username>/<repo>/<tag>` where it can be further manipulated and uploaded again. Either by manipulating filesystem manually, or by using `socker` to run filesystem in a basic container so that packages could be installed etc. 
+Try it out, run following to spin up Bash in a Nginx container:
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/n7on/socker/main/socker) run library/nginx:latest bash
+```
+
+Above will download image root filesystem, maifest.json and config.json and extract it to `~/.socker/images/library/nginx/latest` and create a container using Linux `namespaces` and `pivot_root`. Root is needed because `unshare` requires it in order to create new `namespaces`. Namespaces are removed by kernel when container exits.
 
 ## Prerequisites
 * bash
