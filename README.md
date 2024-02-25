@@ -1,5 +1,5 @@
 # Socker
-Socker is a standalone Docker implementation in Bash using flat images instead of `OverlayFS` filesystem. Making it useful to perform various actions on images, such as:
+Socker is a standalone Docker implementation in bash using flat images instead of `OverlayFS` filesystem. Making it useful to perform various actions on images, such as:
 
 * Create base images
 * Flatten existing images
@@ -124,7 +124,9 @@ docker run -it --rm <docker-hub-username>/<repository>:<tag> bash
 * `dev` filesystem is mounted to `/dev`.
 * oldroot is unmounted and removed.
 * hostname is changed to image name.
-* The bash process is __replaced__ with the intended process, which is part of the new root filesystem. This is needed because the process started need to be PID 1. 
+* The bash process is __replaced__ with the intended process, which is part of the new root filesystem. This is needed because the process started need to be PID 1.
+
+> Note, `socker run` initialized the container using `bash`. And because of that there are some prerequisites, image need to have `mount`, `rmdir`, `mkdir`, `hostname` and `exec` available in root filesystem.
 
 To run sh inside alpine image, as a container, we could do like this:
 ```bash

@@ -14,7 +14,7 @@ config_path="$images_path/$repo/$tag/config.json"
 
 registry_auth_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:$repo:pull"
 registry_uri=https://registry-1.docker.io/v2
-script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
 
 function die(){
     echo "Error: $1" 1>&2
@@ -178,12 +178,13 @@ case "$1" in
     ;;
     run)
 
-    [ ! -d "$image_path/rootfs" ] && eval "$script_path/socker pull $repo:$tag"
+    [ ! -d "$image_path/rootfs" ] && eval "$0 $repo:$tag"
     
-    echo "nameserver 8.8.8.8" > $image_path/rootfs/etc/resolv.conf
-    chmod 1777 $image_path/rootfs/tmp
+    [ -d "$image_path/rootfs/etc" ] && echo "nameserver 8.8.8.8" > $image_path/rootfs/etc/resolv.conf
     
-    sudo -E unshare  --uts --mount --pid --ipc --fork bash $script_path/socker init $repo:$tag "${@:3}"
+    [ -d "$image_path/rootfs/tmp" ] && chmod 1777 $image_path/rootfs/tmp
+    
+    sudo -E unshare  --uts --mount --pid --ipc --fork bash $0 init $repo:$tag "${@:3}"
     ;;
     init)
     cd $image_path
