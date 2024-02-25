@@ -3,18 +3,9 @@ set -eo pipefail
 
 platform="amd64"
 os="linux"
-repo=${2%*:*}
-tag=${2#*:*}
+auth_uri="https://auth.docker.io/token?service=registry.docker.io&scope=repository"
+registry_uri="https://registry-1.docker.io/v2"
 images_path="$HOME/.socker/images"
-image_path="$images_path/$repo/$tag"
-repo_path="$images_path/$repo"
-tarball_path="$images_path/$repo/$tag/rootfs.tar.gz"
-tarball_uncompressed_path="$images_path/$repo/$tag/rootfs.tar"
-config_path="$images_path/$repo/$tag/config.json"
-
-registry_auth_url="https://auth.docker.io/token?service=registry.docker.io&scope=repository:$repo:pull"
-registry_uri=https://registry-1.docker.io/v2
-
 
 function die(){
     echo "Error: $1" 1>&2
@@ -38,10 +29,15 @@ EOF
 }
 
 function image_get_token(){
-    curl -s "$registry_auth_url" | jq -r '.token'
+    local repo="$1"
+    local url="$auth_uri:$repo:pull"
+    curl -s "$url" | jq -r '.token'
 } 
 function image_get_push_token(){
-    curl -s -u "$DOCKER_USERNAME:$DOCKER_PASSWORD"  "$registry_auth_url,push" | jq -r '.token'
+    local repo="$1"
+    local url="$auth_uri:$repo:pull,push"
+
+    curl -s -u "$DOCKER_USERNAME:$DOCKER_PASSWORD"  "$url" | jq -r '.token'
 }
 
 function image_get_manifest(){
@@ -86,6 +82,7 @@ function image_put_blob(){
 
 function image_put(){
     local url="$registry_uri/$1/manifests/$3"
+    echo "Uploading '$1:$3'"
     local layer=$(image_put_blob "$1" "$2" "$tarball_path")
     local config=$(image_put_blob "$1" "$2" "$config_path")
 
@@ -108,22 +105,19 @@ function image_put(){
     curl -X PUT -s -H "Authorization: Bearer $2" -H "Content-Type: application/vnd.docker.distribution.manifest.v2+json" --data "$manifest" "$url"
 }
 
+function socker_pull(){
+    local repo=${1%*:*}
+    local tag=${1#*:*}
+    local image_path="$images_path/$repo/$tag"
 
-[[ $2 =~ ^[a-z0-9_-]+/[a-z0-9_-]+:[a-z0-9_-]+$ ]] || help
-
-if ! command -v jq &> /dev/null; then
-    die "jq is not installed!"
-fi
-
-case "$1" in 
-    pull)
+    [[ $1 =~ ^[a-z0-9_-]+/[a-z0-9_-]+:[a-z0-9_-]+$ ]] || help
     [ ! -d "$image_path" ] || die "Image already downloaded in $image_path"
     
-    token=$(image_get_token "$repo")
-    resp=$(image_get_manifest "$repo" "$tag" "$token")
+    local token=$(image_get_token "$repo")
+    local resp=$(image_get_manifest "$repo" "$tag" "$token")
     
     if echo $resp | jq -e 'has("manifests")' > /dev/null; then
-        digest=$(echo $resp | jq -r ".manifests | .[] | select(.platform.architecture == \"${platform}\" and .platform.os == \"${os}\") | .digest")
+        local digest=$(echo $resp | jq -r ".manifests | .[] | select(.platform.architecture == \"${platform}\" and .platform.os == \"${os}\") | .digest")
         resp=$(image_get_manifest "$repo" "$digest" "$token")
     fi
     mkdir -p "$image_path/rootfs"
@@ -133,22 +127,31 @@ case "$1" in
     image_get_blob $repo $(echo $resp | jq -r '.config.digest') "$token" $image_path/config.json
     
     echo $resp | jq -r '.layers[] | .digest' | while read l; do
-        image_get_blob $repo $l $token $image_path/layer.tar
+        image_get_blob "$repo" "$l" "$token" $image_path/layer.tar
         tar xfz $image_path/layer.tar -C $image_path/rootfs
         rm $image_path/layer.tar
     done;
-    ;;
-    push)
-    [ -d "$image_path" ] || die "No filesystem found in: $image_path"
 
+}
+
+function socker_push(){
+    local repo=${1%*:*}
+    local tag=${1#*:*}
+    local image_path="$images_path/$repo/$tag"
+    local tarball_path="$image_path/rootfs.tar.gz"
+    local tarball_uncompressed_path="$image_path/rootfs.tar"
+    local config_path="$image_path/config.json"
+
+    [[ $1 =~ ^[a-z0-9_-]+/[a-z0-9_-]+:[a-z0-9_-]+$ ]] || help
+    [ -d "$image_path" ] || die "No filesystem found in: $image_path"
     [ -z "$DOCKER_USERNAME" -o -z "$DOCKER_PASSWORD" ] && die "DOCKER_USERNAME or DOCKER_PASSWORD not set!"
 
     tar -czf $tarball_path -C $image_path/rootfs .
     # config need a sha256sum from uncompressed tar, while manifest need it from a compressed tar.
     tar -cf $tarball_uncompressed_path -C $image_path/rootfs .
-    tarball_digest=$(sha256sum $tarball_uncompressed_path | cut -d ' ' -f1)
+    local tarball_digest=$(sha256sum $tarball_uncompressed_path | cut -d ' ' -f1)
     rm $tarball_uncompressed_path
-    if $true ; then #[ ! -f $config_path ];then
+    if [ ! -f $config_path ];then
         config="{
             \"architecture\": \"$platform\",
             \"config\": {
@@ -174,21 +177,24 @@ case "$1" in
         echo $(jq ".rootfs.diff_ids |= [\"$tarball_digest\"]" $config_path) > $config_path 
     fi
     
-    image_put $repo "$(image_get_push_token $repo)" $tag 
-    ;;
-    run)
+    image_put $repo "$(image_get_push_token $repo)" $tag
 
-    [ ! -d "$image_path/rootfs" ] && eval "$0 $repo:$tag"
+}
+
+function socker_run(){
+    local repo=${1%*:*}
+    local tag=${1#*:*}
+    local image_path="$images_path/$repo/$tag"
+
+    [ ! -d "$image_path/rootfs" ] && socker_pull "$1"
     
     [ -d "$image_path/rootfs/etc" ] && echo "nameserver 8.8.8.8" > $image_path/rootfs/etc/resolv.conf
     
     [ -d "$image_path/rootfs/tmp" ] && chmod 1777 $image_path/rootfs/tmp
     
-    sudo -E unshare  --uts --mount --pid --ipc --fork bash $0 init $repo:$tag "${@:3}"
-    ;;
-    init)
+    local hostname=$(echo $repo | cut -f2 -d/)
     cd $image_path
-    hostname=$(echo $repo | cut -f2 -d/)
+    sudo -E unshare  --uts --mount --pid --ipc --fork bash -c "
     # needed by pivot_root
     mount --bind rootfs rootfs
     # enter root filesystem
@@ -220,6 +226,15 @@ case "$1" in
     hostname "$hostname"
 
     # Run the indended process using same process id
-    exec "${@:3}"
-    ;;
+    exec ${@:2}
+    "
+}
+
+if ! command -v jq &> /dev/null; then
+    die "jq is not installed!"
+fi
+
+case $1 in 
+    pull|push|run) socker_"$1" "${@:2}" ;;
+    *) help ;;
 esac
