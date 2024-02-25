@@ -5,7 +5,7 @@ Socker is a standalone Docker implementation in bash using flat images instead o
 * Flatten existing images
 * Analyse images
 
-Try it out, run following to spin up Bash in a Nginx container:
+Try it out, run following to spin up Bash in a Nginx container (Docker is __NOT__ needed):
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/n7on/socker/main/socker) run library/nginx:latest bash
