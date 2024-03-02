@@ -194,7 +194,11 @@ function socker_run(){
     
     local hostname=$(echo $repo | cut -f2 -d/)
     cd $image_path
-    sudo -E unshare  --uts --mount --pid --ipc --fork bash -c "
+
+    unshare_cmd="unshare"
+    [ "$(id -u)" -eq 0 ] || unshare_cmd="sudo -E $unshare_cmd" 
+
+    $unshare_cmd --uts --mount --pid --ipc --fork bash -c "
     # needed by pivot_root
     mount --bind rootfs rootfs
     # enter root filesystem
