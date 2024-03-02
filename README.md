@@ -1,5 +1,5 @@
 # Socker
-Socker is a stand-alone container implementation in bash using Docker Hub images, without Docker. Internally the image layers are extracted to normal filesystem instead of `OverlayFS` filesystem. This alters the image to only contain one layer, making it useful to perform various image related actions:
+Socker is a container implementation in bash using Docker Hub images, without Docker. Internally the image layers are extracted to normal filesystem instead of `OverlayFS` filesystem. This alters the image to only contain one layer, making it useful to perform various image related actions:
 
 * Create Docker base images
 * Flatten existing Docker images
